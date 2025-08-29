@@ -80,7 +80,6 @@ static void* worker_run(void *vp){
 static int ecm_parallel(const mpz_t n, double B1, unsigned long curves,
                         unsigned threads, mpz_t f, unsigned long seed_base){
   if (threads <= 1) {
-    /* mpz_t is an array type; make a local modifiable copy for ecm_loop */
     mpz_t tmp;
     mpz_init_set(tmp, n);
     int r = ecm_loop(tmp, B1, curves, f, seed_base);
@@ -92,7 +91,6 @@ static int ecm_parallel(const mpz_t n, double B1, unsigned long curves,
   worker_arg_t *args = (worker_arg_t*)calloc(threads, sizeof(worker_arg_t));
   if (!ths || !args) die("oom");
 
-  /* Divide curves across threads */
   unsigned long base = curves / threads;
   unsigned long rem  = curves % threads;
 
@@ -102,7 +100,7 @@ static int ecm_parallel(const mpz_t n, double B1, unsigned long curves,
 
   for (unsigned t=0; t<threads; ++t){
     unsigned long cnt = base + (t < rem ? 1UL : 0UL);
-    mpz_init_set(args[t].n_local, n);        /* copy N */
+    mpz_init_set(args[t].n_local, n);
     args[t].B1 = B1;
     args[t].curves = cnt;
     args[t].seed_base = seed_base + (t * 100000UL); /* stagger streams */
@@ -146,7 +144,6 @@ static void factor_rec(mpz_t n, double B1, unsigned long curves, unsigned maxste
     mpz_clear(q); mpz_clear(f); return;
   }
 
-  /* Try ECM with progressive B1 if needed */
   double b1 = B1;
   for (unsigned tries=0; tries<maxsteps; ++tries){
     if (ecm_loop(n, b1, curves, f, (unsigned long)time(NULL))){
@@ -183,7 +180,14 @@ int main(int argc, char** argv){
 
     mpz_t f; mpz_init(f);
     int ok = ecm_parallel(n, B1, curves, threads, f, seed ? seed : (unsigned long)time(NULL));
-    if (ok) gmp_printf("%Zd\n", f); else printf("no-factor\n");
+
+    /* Only accept non-trivial factor: 1 < f < n */
+    if (ok && mpz_cmp_ui(f,1) > 0 && mpz_cmp(f, n) < 0) {
+      gmp_printf("%Zd\n", f);
+    } else {
+      printf("no-factor\n");
+    }
+
     mpz_clear(f); mpz_clear(n); return 0;
   }
 
