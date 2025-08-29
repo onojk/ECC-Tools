@@ -1,0 +1,12 @@
+name: build
+on: [push, pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libgmp-dev libecm-dev
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build -j
+      - run: ./build/ecc-tools factor 8051 | tee out.txt
+      - run: grep -E "83.*\\*.*97|97.*\\*.*83" out.txt

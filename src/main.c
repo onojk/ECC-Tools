@@ -8,7 +8,8 @@
 static void die(const char* m){ fprintf(stderr,"error: %s\n", m); exit(1); }
 
 static int parse_mpz(mpz_t out, const char* s){
-  return mpz_set_str(out, s, 0) == 0; /* base 0: decimal/0x... ok */
+  /* base=0 lets 0x... (hex) or decimal both work */
+  return mpz_set_str(out, s, 0) == 0;
 }
 
 static void usage(const char* p){
@@ -32,7 +33,7 @@ static int ecm_once(mpz_t n, double B1, mpz_t f, unsigned long seed){
   if (seed) gmp_randseed_ui(q->rng, seed);
   int ret = ecm_factor(f, n, B1, q);
   ecm_clear(q);
-  return ret; /* >0 factor found */
+  return ret; /* >0 => factor found; 0 => none; <0 => error */
 }
 
 static int ecm_loop(mpz_t n, double B1, unsigned long curves, mpz_t f, unsigned long seed){
@@ -45,7 +46,7 @@ static int ecm_loop(mpz_t n, double B1, unsigned long curves, mpz_t f, unsigned 
 
 static int is_probable_prime(const mpz_t n){
   int r = mpz_probab_prime_p(n, 25);
-  return r > 0;
+  return r > 0; /* 1 or 2 => probably/definitely prime */
 }
 
 static void factor_rec(mpz_t n, double B1, unsigned long curves, unsigned maxsteps){
@@ -60,6 +61,7 @@ static void factor_rec(mpz_t n, double B1, unsigned long curves, unsigned maxste
     mpz_clear(q); mpz_clear(f); return;
   }
 
+  /* Try ECM with progressive B1 if needed */
   double b1 = B1;
   for (unsigned tries=0; tries<maxsteps; ++tries){
     if (ecm_loop(n, b1, curves, f, (unsigned long)time(NULL))){
@@ -68,7 +70,7 @@ static void factor_rec(mpz_t n, double B1, unsigned long curves, unsigned maxste
       factor_rec(q, B1, curves, maxsteps);
       mpz_clear(q); mpz_clear(f); return;
     }
-    b1 *= 3.0;
+    b1 *= 3.0; /* ramp B1 */
   }
   gmp_printf("[cofactor composite: %Zd]", n);
   mpz_clear(f);
@@ -86,8 +88,8 @@ int main(int argc, char** argv){
     double B1 = 1e6; unsigned long curves = 50, seed = 0;
     for (int i=3;i<argc;i++){
       if (!strcmp(argv[i],"--B1") && i+1<argc) B1 = atof(argv[++i]);
-      else if ((!strcmp(argv[i],"-c")||!strcmp(argv[i],"--curves")) && i+1<argc) curves=strtoul(argv[++i],NULL,10);
-      else if (!strcmp(argv[i],"--seed") && i+1<argc) seed=strtoul(argv[++i],NULL,10);
+      else if ((!strcmp(argv[i],"-c")||!strcmp(argv[i],"--curves")) && i+1<argc) curves = strtoul(argv[++i],NULL,10);
+      else if (!strcmp(argv[i],"--seed") && i+1<argc) seed = strtoul(argv[++i],NULL,10);
       else die("unknown arg");
     }
     mpz_t f; mpz_init(f);
@@ -111,18 +113,3 @@ int main(int argc, char** argv){
 
   usage(argv[0]); return 1;
 }
-"EOF"
-
-cat > .github/workflows/ci.yml <<EOF
-name: build
-on: [push, pull_request]
-jobs:
-  linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libgmp-dev libecm-dev
-      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - run: cmake --build build -j
-      - run: ./build/ecc-tools factor 8051 | tee out.txt
-      - run: grep -E "83.*\*.*97|97.*\*.*83" out.txt
