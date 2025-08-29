@@ -46,8 +46,6 @@ static int ecm_loop(mpz_t n, double B1, unsigned long curves, mpz_t f, unsigned 
 }
 
 /* ---------- Parallel ECM (for ecm subcommand) ---------- */
-/* mpz_t is an array type; store a per-thread copy, pass shared factor as mpz_t* */
-
 typedef struct {
   mpz_t n_local;              /* per-thread copy of N */
   double B1;
@@ -82,8 +80,14 @@ static void* worker_run(void *vp){
 static int ecm_parallel(const mpz_t n, double B1, unsigned long curves,
                         unsigned threads, mpz_t f, unsigned long seed_base){
   if (threads <= 1) {
-    return ecm_loop((mpz_t)n, B1, curves, f, seed_base);
+    /* mpz_t is an array type; make a local modifiable copy for ecm_loop */
+    mpz_t tmp;
+    mpz_init_set(tmp, n);
+    int r = ecm_loop(tmp, B1, curves, f, seed_base);
+    mpz_clear(tmp);
+    return r;
   }
+
   pthread_t *ths = (pthread_t*)calloc(threads, sizeof(pthread_t));
   worker_arg_t *args = (worker_arg_t*)calloc(threads, sizeof(worker_arg_t));
   if (!ths || !args) die("oom");
