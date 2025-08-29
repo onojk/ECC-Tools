@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 #include <gmp.h>
 #include <ecm.h>
 
@@ -15,7 +16,7 @@ static int parse_mpz(mpz_t out, const char* s){
 static void usage(const char* p){
   fprintf(stderr,
     "Usage:\n"
-    "  %s ecm <N> [--B1 <float>] [-c|--curves <n>] [--seed <u64>]\n"
+    "  %s ecm <N> [--B1 <float>] [-c|--curves <n>] [--seed <u64>] [--threads <n>]\n"
     "  %s factor <N> [--B1 <float>] [-c|--curves <n>] [--maxsteps <n>]\n"
     "  %s --help\n", p,p,p);
 }
@@ -43,6 +44,86 @@ static int ecm_loop(mpz_t n, double B1, unsigned long curves, mpz_t f, unsigned 
   }
   return 0;
 }
+
+/* ---------- Parallel ECM (for ecm subcommand) ---------- */
+/* mpz_t is an array type; store a per-thread copy, pass shared factor as mpz_t* */
+
+typedef struct {
+  mpz_t n_local;              /* per-thread copy of N */
+  double B1;
+  unsigned long curves;
+  unsigned long seed_base;
+  mpz_t *shared_f;            /* shared factor destination (protected by mtx) */
+  pthread_mutex_t *mtx;
+  volatile int *stop;
+} worker_arg_t;
+
+static void* worker_run(void *vp){
+  worker_arg_t *a = (worker_arg_t*)vp;
+  mpz_t f; mpz_init(f);
+
+  for (unsigned long i=0; i<a->curves && !*(a->stop); ++i){
+    unsigned long seed = a->seed_base + i;
+    if (ecm_once(a->n_local, a->B1, f, seed) > 0){
+      pthread_mutex_lock(a->mtx);
+      if (!*(a->stop)){
+        mpz_set(*(a->shared_f), f);
+        *(a->stop) = 1;
+      }
+      pthread_mutex_unlock(a->mtx);
+      break;
+    }
+  }
+
+  mpz_clear(f);
+  return NULL;
+}
+
+static int ecm_parallel(const mpz_t n, double B1, unsigned long curves,
+                        unsigned threads, mpz_t f, unsigned long seed_base){
+  if (threads <= 1) {
+    return ecm_loop((mpz_t)n, B1, curves, f, seed_base);
+  }
+  pthread_t *ths = (pthread_t*)calloc(threads, sizeof(pthread_t));
+  worker_arg_t *args = (worker_arg_t*)calloc(threads, sizeof(worker_arg_t));
+  if (!ths || !args) die("oom");
+
+  /* Divide curves across threads */
+  unsigned long base = curves / threads;
+  unsigned long rem  = curves % threads;
+
+  pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+  volatile int stop = 0;
+  mpz_t shared_f; mpz_init(shared_f);
+
+  for (unsigned t=0; t<threads; ++t){
+    unsigned long cnt = base + (t < rem ? 1UL : 0UL);
+    mpz_init_set(args[t].n_local, n);        /* copy N */
+    args[t].B1 = B1;
+    args[t].curves = cnt;
+    args[t].seed_base = seed_base + (t * 100000UL); /* stagger streams */
+    args[t].shared_f = &shared_f;
+    args[t].mtx = &mtx;
+    args[t].stop = &stop;
+    pthread_create(&ths[t], NULL, worker_run, &args[t]);
+  }
+
+  for (unsigned t=0; t<threads; ++t){
+    pthread_join(ths[t], NULL);
+    mpz_clear(args[t].n_local);
+  }
+
+  int found = 0;
+  if (stop){
+    mpz_set(f, shared_f);
+    found = 1;
+  }
+  mpz_clear(shared_f);
+  free(ths); free(args);
+  return found;
+}
+
+/* ---------- Factor (recursive) stays single-thread for now ---------- */
 
 static int is_probable_prime(const mpz_t n){
   int r = mpz_probab_prime_p(n, 25);
@@ -86,14 +167,19 @@ int main(int argc, char** argv){
     mpz_t n; mpz_init(n);
     if (!parse_mpz(n, argv[2])) die("invalid N");
     double B1 = 1e6; unsigned long curves = 50, seed = 0;
+    unsigned threads = 1;
+
     for (int i=3;i<argc;i++){
       if (!strcmp(argv[i],"--B1") && i+1<argc) B1 = atof(argv[++i]);
       else if ((!strcmp(argv[i],"-c")||!strcmp(argv[i],"--curves")) && i+1<argc) curves = strtoul(argv[++i],NULL,10);
       else if (!strcmp(argv[i],"--seed") && i+1<argc) seed = strtoul(argv[++i],NULL,10);
+      else if (!strcmp(argv[i],"--threads") && i+1<argc) threads = (unsigned)strtoul(argv[++i],NULL,10);
       else die("unknown arg");
     }
+
     mpz_t f; mpz_init(f);
-    if (ecm_loop(n,B1,curves,f,seed)) gmp_printf("%Zd\n", f); else printf("no-factor\n");
+    int ok = ecm_parallel(n, B1, curves, threads, f, seed ? seed : (unsigned long)time(NULL));
+    if (ok) gmp_printf("%Zd\n", f); else printf("no-factor\n");
     mpz_clear(f); mpz_clear(n); return 0;
   }
 
