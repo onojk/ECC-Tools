@@ -1,0 +1,9 @@
+build/
+CMakeFiles/
+CMakeCache.txt
+*.o
+*.a
+*.pem
+*.der
+*.log
+.DS_Store
