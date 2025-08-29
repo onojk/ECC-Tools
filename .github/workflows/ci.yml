@@ -1,5 +1,6 @@
 name: build
 on: [push, pull_request]
+
 jobs:
   linux:
     runs-on: ubuntu-latest
@@ -8,5 +9,15 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y build-essential cmake pkg-config libgmp-dev libecm-dev
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build -j
-      - run: ./build/ecc-tools factor 8051 | tee out.txt
-      - run: grep -E "83.*\\*.*97|97.*\\*.*83" out.txt
+
+      # Smoke test: classic 8051
+      - name: Smoke: factor 8051
+        run: |
+          ./build/ecc-tools factor 8051 | tee out.txt
+          grep -E "83.*\\*.*97|97.*\\*.*83" out.txt
+
+      # ECM test: N = 104729 * 1000003 = 104729314187 (both > 100k)
+      - name: ECM: large factor present
+        run: |
+          ./build/ecc-tools ecm 104729314187 --B1 5e4 -c 800 | tee ecm.txt
+          grep -E '^(104729|1000003)$' ecm.txt
