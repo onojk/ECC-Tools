@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ECC-Tools</title>
   <style>
-    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 2rem; max-width: 800px; }
+    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; margin: 2rem; max-width: 900px; }
     pre  { background: #f6f8fa; padding: .75rem 1rem; border-radius: .5rem; white-space: pre-wrap; }
-    input, button { font: inherit; padding: .5rem .75rem; }
-    form { margin: 1rem 0; display: flex; gap: .5rem; flex-wrap: wrap; }
+    input, button, select { font: inherit; padding: .5rem .75rem; }
+    form { margin: 1rem 0; display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); align-items: start; }
+    .row { display:flex; gap:.5rem; flex-wrap:wrap; grid-column: 1 / -1;}
+    label { display:flex; flex-direction:column; gap:.25rem; }
   </style>
 </head>
 <body>
@@ -16,28 +18,67 @@
   <p>Lenstra ECM CLI is installed on this server.</p>
   <pre>$ ecc-tools factor 8051 → 83 * 97</pre>
 
-  <h2>Try it</h2>
-  <form id="f">
-    <input id="n" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Enter an integer (e.g. 8051)" required />
-    <button>Factor</button>
+  <h2>Quick factor</h2>
+  <form id="f-factor">
+    <label> N (integer)
+      <input id="n-factor" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="8051" required />
+    </label>
+    <div class="row"><button>Factor</button></div>
   </form>
-  <pre id="out" aria-live="polite"></pre>
+  <pre id="out-factor" aria-live="polite"></pre>
 
-  <script>
-  const f = document.getElementById('f');
-  const n = document.getElementById('n');
-  const out = document.getElementById('out');
-  f.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    out.textContent = 'Working…';
-    try {
-      const resp = await fetch(`/api/factor?n=${encodeURIComponent(n.value.trim())}`);
-      const data = await resp.json();
-      out.textContent = data.ok ? data.output : `Error: ${data.output || resp.status}`;
-    } catch (err) {
-      out.textContent = 'Network or server error.';
-    }
-  });
-  </script>
+  <h2>ECM (tunable)</h2>
+  <form id="f-ecm">
+    <label> N (integer)
+      <input id="n-ecm" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="8051" required />
+    </label>
+    <label> B1
+      <input id="B1" type="text" placeholder="5e4" />
+    </label>
+    <label> B2 (optional)
+      <input id="B2" type="text" placeholder="1e8" />
+    </label>
+    <label> Curves (c)
+      <input id="c" type="number" min="1" max="9999" value="50" />
+    </label>
+    <label> Threads
+      <input id="threads" type="number" min="1" max="256" value="1" />
+    </label>
+    <label> Timeout (s)
+      <input id="timeout" type="number" min="1" max="600" value="120" />
+    </label>
+    <div class="row"><button>Run ECM</button></div>
+  </form>
+  <pre id="out-ecm" aria-live="polite"></pre>
+
+<script>
+async function go(url, out){
+  out.textContent = 'Working…';
+  try{
+    const r = await fetch(url);
+    const j = await r.json();
+    out.textContent = j.ok ? j.output : `Error: ${j.output||r.status}`;
+  }catch(e){ out.textContent = 'Network or server error.' }
+}
+
+document.getElementById('f-factor').addEventListener('submit', e=>{
+  e.preventDefault();
+  const n = document.getElementById('n-factor').value.trim();
+  go(`/api/factor?n=${encodeURIComponent(n)}`, document.getElementById('out-factor'));
+});
+
+document.getElementById('f-ecm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const q = new URLSearchParams();
+  const val = id => document.getElementById(id).value.trim();
+  q.set('n', val('n-ecm'));
+  if(val('B1')) q.set('B1', val('B1'));
+  if(val('B2')) q.set('B2', val('B2'));
+  if(val('c'))  q.set('c',  val('c'));
+  if(val('threads')) q.set('threads', val('threads'));
+  if(val('timeout')) q.set('timeout', val('timeout'));
+  go(`/api/ecm?${q.toString()}`, document.getElementById('out-ecm'));
+});
+</script>
 </body>
 </html>
