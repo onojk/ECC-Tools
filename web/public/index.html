@@ -86,3 +86,41 @@ document.getElementById('f-ecm').addEventListener('submit', e=>{
 </script>
 </body>
 </html>
+
+<footer style="margin-top:2rem;opacity:.7">
+  <small id="ver">Loading version…</small>
+</footer>
+<script>
+(async()=>{
+  try{
+    const v = await (await fetch('/api/version')).json();
+    const s = `API: ${v.service} · ECC-Tools commit: ${v.ecc_tools_commit||'n/a'} · ${new Date(v.server_time*1000).toISOString()}`;
+    document.getElementById('ver').textContent = s;
+  }catch{ document.getElementById('ver').textContent = 'Version unavailable'; }
+})();
+</script>
+<h2>Rho (fast 64-bit demo)</h2>
+<form id="f-rho">
+  <label>N (≤ 64-bit integer)
+    <input id="n-rho" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="8051" required />
+  </label>
+  <label>Iterations (budget)
+    <input id="iters" type="number" min="1" max="1000000000" value="1000000" />
+  </label>
+  <div class="row"><button>Run rho</button></div>
+</form>
+<pre id="out-rho" aria-live="polite"></pre>
+<script>
+document.getElementById('f-rho').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const n = document.getElementById('n-rho').value.trim();
+  const iters = document.getElementById('iters').value.trim();
+  const out = document.getElementById('out-rho');
+  out.textContent = 'Working…';
+  try{
+    const r = await fetch(`/api/rho?n=${encodeURIComponent(n)}&iters=${encodeURIComponent(iters)}`);
+    const j = await r.json();
+    out.textContent = j.ok ? `factor: ${j.output}` : `Error: ${j.output||r.status}`;
+  }catch{ out.textContent = 'Network or server error.' }
+});
+</script>
