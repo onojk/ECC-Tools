@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECC-Tools — Lenstra ECM factoring in C</title>
+<meta name="description" content="ECC-Tools is a small, fast C command-line tool for integer factorization using Lenstra's elliptic-curve method (ECM), built on GMP and libecm.">
+<link rel="canonical" href="https://ecc-tools.com/">
+<meta property="og:title" content="ECC-Tools — Lenstra ECM factoring in C">
+<meta property="og:description" content="A small, fast C CLI for integer factorization via Lenstra ECM, built on GMP and libecm.">
+<meta property="og:url" content="https://ecc-tools.com/">
+<meta property="og:type" content="website">
+<meta name="author" content="Jonathan Kendall">
+<style>
+:root{
+  --bg:#fbfbfa;--fg:#1c1d1f;--muted:#5d6168;--card:#ffffff;--border:#e3e4e6;
+  --accent:#2f6fde;--code-bg:#f2f3f5;--code-fg:#1c1d1f;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121316;--fg:#e8e9eb;--muted:#9a9ea6;--card:#1a1c20;--border:#2b2e34;
+    --accent:#7aa7ff;--code-bg:#1e2126;--code-fg:#dfe2e7;}
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{padding:56px 0 24px}
+h1{font-size:clamp(2rem,6vw,2.75rem);line-height:1.15;margin:0 0 12px;letter-spacing:-.02em}
+.lede{font-size:1.15rem;color:var(--muted);margin:0 0 24px}
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-block;padding:10px 16px;border-radius:8px;border:1px solid var(--border);
+  color:var(--fg);text-decoration:none;font-weight:600;background:var(--card)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){.btn.primary{color:#0d1117}}
+.btn:hover{filter:brightness(1.08)}
+section{padding:28px 0;border-top:1px solid var(--border)}
+h2{font-size:1.35rem;margin:0 0 12px}
+h3{font-size:1.05rem;margin:20px 0 8px}
+p{margin:0 0 12px}
+a{color:var(--accent)}
+ul{padding-left:20px;margin:0 0 12px}
+li{margin:4px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;font-size:.92em;
+  background:var(--code-bg);color:var(--code-fg);padding:.1em .35em;border-radius:4px}
+pre{background:var(--code-bg);color:var(--code-fg);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;margin:0 0 14px;line-height:1.5}
+pre code{background:none;padding:0;font-size:.88em}
+.prompt{color:var(--muted);user-select:none}
+.out{color:var(--muted)}
+table{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:.95rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-weight:600}
+td code{white-space:nowrap}
+.tbl{overflow-x:auto}
+footer{padding:28px 0 48px;border-top:1px solid var(--border);color:var(--muted);font-size:.95rem}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>ECC-Tools</h1>
+  <p class="lede">A small, fast command-line tool in C for integer factorization using
+  <strong>Lenstra's elliptic-curve method (ECM)</strong>, built on GMP and libecm.</p>
+  <div class="btns">
+    <a class="btn primary" href="https://github.com/onojk/ECC-Tools">View on GitHub</a>
+    <a class="btn" href="#build">Build</a>
+    <a class="btn" href="#usage">Usage</a>
+  </div>
+</header>
+
+<section id="about">
+  <h2>What it does</h2>
+  <p>ECC-Tools finds factors of large integers. The elliptic-curve method works well for
+  pulling out small-to-medium prime factors of numbers too big for trial division.
+  It does the curve arithmetic through <a href="https://gitlab.inria.fr/zimmerma/ecm">GMP-ECM</a> (libecm)
+  and handles big numbers with <a href="https://gmplib.org/">GMP</a>.</p>
+  <ul>
+    <li><strong><code>ecm</code></strong> runs ECM on <var>N</var> and prints one factor. It can run curves on several threads and lets you tune B1, B2, curve count, seed, sigma and other ECM settings.</li>
+    <li><strong><code>factor</code></strong> splits <var>N</var> again and again until every piece is a probable prime, then prints the full factorization.</li>
+    <li>Quick trial division runs first, so small factors come out at once.</li>
+    <li>A single C11 source file built with CMake. MIT licensed.</li>
+  </ul>
+</section>
+
+<section id="build">
+  <h2>Build</h2>
+  <p>On Debian or Ubuntu:</p>
+<pre><code>sudo apt-get update
+sudo apt-get install -y build-essential cmake pkg-config libgmp-dev libecm-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+./build/ecc-tools --help</code></pre>
+  <p>CMake looks for <code>gmp.h</code>/<code>libgmp</code> and <code>ecm.h</code>/<code>libecm</code>
+  in the usual system and <code>/usr/local</code> paths.</p>
+</section>
+
+<section id="usage">
+  <h2>Usage</h2>
+<pre><code>ecc-tools ecm &lt;N&gt; [--B1 &lt;float&gt;] [--B2 &lt;num&gt;] [-c|--curves &lt;n&gt;] [--seed &lt;u64&gt;]
+              [--threads &lt;n&gt;] [--S &lt;int&gt;] [--k &lt;n&gt;] [--ntt] [--sigma &lt;u64&gt;] [--verbose]
+ecc-tools factor &lt;N&gt; [--B1 &lt;float&gt;] [-c|--curves &lt;n&gt;] [--maxsteps &lt;n&gt;]
+ecc-tools --help</code></pre>
+
+  <h3>Examples</h3>
+  <p>Fully factor a semiprime:</p>
+<pre><code><span class="prompt">$ </span>./build/ecc-tools factor 1000000016000000063
+<span class="out">1000000009 * 1000000007</span></code></pre>
+  <p>Find one factor with ECM on 4 threads, using a smaller B1 and more curves:</p>
+<pre><code><span class="prompt">$ </span>./build/ecc-tools ecm 1000000016000000063 --B1 50000 -c 200 --threads 4
+<span class="out">1000000009</span></code></pre>
+  <p>If <code>ecm</code> finds no factor with the given settings, it prints <code>no-factor</code>.</p>
+
+  <h3>Options</h3>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>Option</th><th>Applies to</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>--B1</code></td><td>ecm, factor</td><td>Stage-1 bound (default <code>1e6</code>)</td></tr>
+      <tr><td><code>-c</code>, <code>--curves</code></td><td>ecm, factor</td><td>Number of curves to try (default <code>50</code>)</td></tr>
+      <tr><td><code>--B2</code></td><td>ecm</td><td>Stage-2 bound</td></tr>
+      <tr><td><code>--threads</code></td><td>ecm</td><td>Worker threads (default <code>1</code>)</td></tr>
+      <tr><td><code>--seed</code></td><td>ecm</td><td>RNG seed for curve selection</td></tr>
+      <tr><td><code>--sigma</code></td><td>ecm</td><td>Fixed curve parameter σ</td></tr>
+      <tr><td><code>--S</code>, <code>--k</code>, <code>--ntt</code></td><td>ecm</td><td>Advanced stage-2 tuning passed to libecm</td></tr>
+      <tr><td><code>--verbose</code></td><td>ecm</td><td>Print parameters to stderr</td></tr>
+      <tr><td><code>--maxsteps</code></td><td>factor</td><td>ECM rounds per split; B1 triples each round (default <code>6</code>). A piece that still won't split prints as <code>[cofactor composite: …]</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="source">
+  <h2>Source</h2>
+  <p>Code, issues and releases are at
+  <a href="https://github.com/onojk/ECC-Tools">github.com/onojk/ECC-Tools</a>.</p>
+</section>
+
+<footer>
+  <p>ECC-Tools by <a href="https://www.jonathankendallart.com/about/">Jonathan Kendall</a>.
+  See also <a href="https://rsacrack.com">rsacrack.com</a>.
+  Released under the MIT License.</p>
+</footer>
+
+</div>
+</body>
+</html>
